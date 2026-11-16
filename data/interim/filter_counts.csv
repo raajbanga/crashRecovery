@@ -1,0 +1,9 @@
+step,covid_2020,rates_2022,tariff_2025
+All companies,20547,20547,20547
+Has a 10-K filed before the peak,10631,11495,13264
+Latest 10-K is recent,5675,5745,5749
+Not a SPAC (SIC 6770),5618,5582,5580
+Not a SPAC (most assets in trust),5581,5455,5511
+Not a SPAC (name at peak),5574,5440,5500
+Not a fund or asset-backed issuer,5512,5382,5432
+"Public float above zero, or a common ticker",5095,5077,5119
