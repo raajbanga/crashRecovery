@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crash Recovery</title>
+<meta name="description" content="Can a firm's financials before a crash predict whether its stock recovers, and does that hold when the next crash has a different cause? Results across the 2020, 2022 and 2025 crashes.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  color-scheme: light;
+  --plane: #f2f4f6;
+  --surface: #fbfcfd;
+  --ink: #13202c;
+  --ink-2: #4a5866;
+  --muted: #7c8794;
+  --rule: #dce1e6;
+  --axis: #c3c9cf;
+  --grid: #e6e9ec;
+  --focus: #2a78d6;
+  --c0: #2a78d6;   /* COVID-19, 2020 */
+  --c1: #eb6834;   /* Rate hikes, 2022 */
+  --c2: #1baf7a;   /* Tariffs, 2025 */
+  --mid: #eceae6;  /* diverging midpoint */
+  --pos-1: #cde2fb; --pos-2: #86b6ef; --pos-3: #3987e5; --pos-4: #1c5cab;
+  --neg-1: #f8d4d3; --neg-2: #ef9796; --neg-3: #e34948; --neg-4: #b0302f;
+  --serif: "Newsreader", "Iowan Old Style", Georgia, serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --plane: #0f1419; --surface: #161c22; --ink: #e9edf1; --ink-2: #aeb8c2; --muted: #7f8a95;
+    --rule: #2a323a; --axis: #3a434c; --grid: #232a31; --focus: #6da7ec;
+    --c0: #3987e5; --c1: #d95926; --c2: #199e70;
+    --mid: #33393f;
+    --pos-1: #1b3556; --pos-2: #1c5cab; --pos-3: #3987e5; --pos-4: #86b6ef;
+    --neg-1: #4a2223; --neg-2: #8e2e2e; --neg-3: #e34948; --neg-4: #f0a1a0;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --plane: #0f1419; --surface: #161c22; --ink: #e9edf1; --ink-2: #aeb8c2; --muted: #7f8a95;
+  --rule: #2a323a; --axis: #3a434c; --grid: #232a31; --focus: #6da7ec;
+  --c0: #3987e5; --c1: #d95926; --c2: #199e70;
+  --mid: #33393f;
+  --pos-1: #1b3556; --pos-2: #1c5cab; --pos-3: #3987e5; --pos-4: #86b6ef;
+  --neg-1: #4a2223; --neg-2: #8e2e2e; --neg-3: #e34948; --neg-4: #f0a1a0;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--plane); color: var(--ink);
+  font: 16px/1.55 var(--sans);
+}
+a { color: inherit; text-decoration-color: var(--axis); text-underline-offset: 3px; }
+a:hover { text-decoration-color: currentColor; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 3px; }
+
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+.prose { max-width: 66ch; }
+.prose p { margin: 0 0 1em; color: var(--ink-2); }
+.prose p strong { color: var(--ink); font-weight: 600; }
+
+/* Top bar: project name, links, and the one outcome switch that drives the page */
+.bar {
+  position: sticky; top: 0; z-index: 10;
+  background: color-mix(in srgb, var(--plane) 88%, transparent);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--rule);
+}
+.bar .wrap { display: flex; align-items: center; gap: 16px; min-height: 56px; flex-wrap: wrap; padding-block: 8px; }
+.bar .name { font-family: var(--serif); font-size: 19px; font-weight: 600; margin-right: auto; text-decoration: none; }
+.bar nav { display: flex; gap: 18px; font-size: 14px; color: var(--ink-2); }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 999px; padding: 3px; background: var(--surface); }
+.seg button {
+  font: 500 13px/1 var(--sans); color: var(--ink-2); background: none; border: 0;
+  padding: 7px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+}
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.seg-label { font-size: 13px; color: var(--muted); }
+.switch { display: flex; align-items: center; gap: 8px; }
+
+/* Hero */
+.hero { padding: 64px 0 56px; }
+.hero-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 56px; align-items: start; }
+h1 {
+  font-family: var(--serif); font-weight: 500; font-size: clamp(36px, 5vw, 58px);
+  line-height: 1.04; letter-spacing: -0.015em; margin: 0 0 24px;
+  font-variation-settings: "opsz" 72;
+}
+.lede { font-family: var(--serif); font-size: 21px; line-height: 1.45; color: var(--ink-2); margin: 0 0 20px; }
+.hero .prose p { font-size: 16px; }
+
+/* Transfer matrix: the main result */
+.matrix { display: grid; grid-template-columns: 92px repeat(3, 1fr); gap: 4px; }
+.matrix .corner { grid-row: span 1; }
+.matrix .colhead, .matrix .rowhead { font-size: 13px; color: var(--ink-2); display: flex; }
+.matrix .colhead { align-items: end; justify-content: center; padding-bottom: 6px; text-align: center; line-height: 1.25; }
+.matrix .rowhead { align-items: center; padding-right: 10px; line-height: 1.25; }
+.axis-note { font-size: 12px; color: var(--muted); }
+.axis-note.top { grid-column: 2 / span 3; text-align: center; }
+.cell {
+  aspect-ratio: 1 / 0.86; border-radius: 6px; padding: 12px;
+  display: flex; flex-direction: column; justify-content: space-between;
+  transition: background-color .35s ease, color .35s ease;
+}
+.cell .v { font-family: var(--serif); font-size: clamp(26px, 3.6vw, 40px); line-height: 1; font-variant-numeric: tabular-nums; }
+.cell .k { font-size: 12px; line-height: 1.3; opacity: .85; }
+.cell.diag { box-shadow: inset 0 0 0 2px var(--ink); }
+.matrix-foot { display: flex; gap: 28px; margin-top: 22px; flex-wrap: wrap; }
+.matrix-foot div { font-size: 14px; color: var(--ink-2); }
+.matrix-foot b { display: block; font-family: var(--serif); font-weight: 500; font-size: 30px; color: var(--ink); line-height: 1.1; }
+.scale { display: flex; align-items: center; gap: 8px; margin-top: 18px; font-size: 12px; color: var(--muted); }
+.scale .ramp { display: flex; height: 10px; flex: 0 0 180px; border-radius: 2px; overflow: hidden; }
+.scale .ramp span { flex: 1; }
+
+/* Sections */
+section.block { padding: 72px 0; border-top: 1px solid var(--rule); }
+h2 {
+  font-family: var(--serif); font-weight: 500; font-size: clamp(28px, 3.4vw, 38px);
+  line-height: 1.12; letter-spacing: -0.01em; margin: 0 0 16px; max-width: 26ch;
+}
+h3 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+.sub { font-size: 14px; color: var(--muted); margin: 0 0 14px; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; align-items: start; margin-top: 32px; }
+
+/* Crash columns: a coloured top rule identifies each crash across the page */
+.crashes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin-top: 36px; }
+.crash { border-top: 4px solid var(--cc); padding-top: 16px; }
+.crash h3 { font-family: var(--serif); font-weight: 500; font-size: 24px; margin-bottom: 2px; }
+.crash .when { font-size: 14px; color: var(--muted); margin-bottom: 18px; }
+.crash dl { display: grid; grid-template-columns: auto auto; gap: 8px 16px; margin: 0; font-size: 14px; }
+.crash dt { color: var(--ink-2); }
+.crash dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+.crash p { font-size: 14px; color: var(--ink-2); margin: 16px 0 0; }
+
+/* Legend */
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-2); margin: 0 0 10px; }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.legend i { width: 14px; height: 3px; border-radius: 2px; background: var(--cc); }
+.legend i.dot { width: 10px; height: 10px; border-radius: 50%; }
+.legend i.ring { width: 10px; height: 10px; border-radius: 50%; background: transparent; border: 2px solid var(--ink-2); }
+.legend i.bar { width: 18px; height: 3px; background: var(--ink-2); }
+
+.chart { position: relative; height: 320px; }
+.chart.tall { height: 380px; }
+
+/* Feature flip table */
+.ftable { width: 100%; border-collapse: collapse; font-size: 14px; }
+.ftable th { font-weight: 500; color: var(--muted); font-size: 12px; text-align: center; padding: 0 0 8px; }
+.ftable th:first-child { text-align: left; }
+.ftable td { padding: 0; border-top: 2px solid var(--plane); }
+.ftable tr { cursor: pointer; }
+.ftable td:first-child { padding: 6px 10px 6px 0; color: var(--ink-2); }
+.ftable tr[aria-selected="true"] td:first-child { color: var(--ink); font-weight: 600; }
+.ftable tr[aria-selected="true"] td:first-child::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--ink); margin: 0 8px 1px 0; }
+.ftable tr:hover td:first-child { color: var(--ink); }
+.ftable .sp { text-align: center; font-variant-numeric: tabular-nums; width: 64px; height: 30px; font-size: 13px; border-left: 2px solid var(--plane); }
+.ftable .flag { width: 54px; text-align: right; font-size: 12px; color: var(--muted); padding-left: 8px; }
+.ftable .flag.on { color: var(--ink); font-weight: 600; }
+
+/* Dumbbell */
+.dumb svg { width: 100%; height: auto; display: block; overflow: visible; }
+.dumb text { font: 13px var(--sans); fill: var(--ink-2); }
+.dumb .tick { font-size: 11px; fill: var(--muted); }
+
+/* Firm finder */
+.finder-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 28px 0 16px; }
+.finder-controls label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+input[type="search"], select {
+  font: 15px var(--sans); color: var(--ink); background: var(--surface);
+  border: 1px solid var(--rule); border-radius: 8px; padding: 9px 12px; min-height: 40px;
+}
+input[type="search"] { width: 300px; max-width: 100%; }
+.tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; }
+table.firms { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 860px; }
+table.firms th {
+  text-align: left; font-weight: 500; font-size: 12px; color: var(--muted); padding: 12px 14px;
+  border-bottom: 1px solid var(--rule); white-space: nowrap;
+}
+table.firms th button { all: unset; cursor: pointer; }
+table.firms th button:focus-visible { outline: 2px solid var(--focus); }
+table.firms th.num, table.firms td.num { text-align: right; }
+table.firms td { white-space: nowrap; padding: 10px 14px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
+table.firms tr:last-child td { border-bottom: 0; }
+table.firms td.tk { font-weight: 600; }
+table.firms td.nm { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.cdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--cc); margin-right: 7px; }
+.yes { color: var(--ink); }
+.no { color: var(--muted); }
+.pager { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 14px; color: var(--ink-2); gap: 12px; flex-wrap: wrap; }
+.pager button {
+  font: 500 14px var(--sans); color: var(--ink); background: var(--surface); border: 1px solid var(--rule);
+  border-radius: 8px; padding: 7px 14px; cursor: pointer; min-height: 36px;
+}
+.pager button:disabled { opacity: .4; cursor: default; }
+
+/* Pipeline */
+.steps { list-style: none; margin: 32px 0 0; padding: 0; display: grid; gap: 10px; }
+.steps li { display: grid; grid-template-columns: 28px minmax(0, 260px) minmax(0, 1fr) 72px; gap: 14px; align-items: center; font-size: 14px; }
+.steps .n { color: var(--muted); font-variant-numeric: tabular-nums; }
+.steps .lbl { color: var(--ink-2); }
+.steps .track { height: 14px; background: var(--grid); border-radius: 3px; overflow: hidden; }
+.steps .fill { height: 100%; background: var(--ink-2); border-radius: 3px; }
+.steps .val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+.guards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 48px; margin-top: 48px; }
+.guards p { font-size: 14px; color: var(--ink-2); margin: 0; }
+
+footer { border-top: 1px solid var(--rule); padding: 32px 0 48px; font-size: 14px; color: var(--muted); }
+footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (max-width: 880px) {
+  .hero-grid, .two { grid-template-columns: 1fr; gap: 36px; }
+  .crashes { grid-template-columns: 1fr; gap: 28px; }
+  .guards { grid-template-columns: 1fr; }
+  .steps li { grid-template-columns: 22px minmax(0, 1fr) 64px; }
+  .steps .track { grid-column: 2 / span 2; grid-row: 2; }
+}
+@media (max-width: 560px) {
+  .wrap { padding: 0 16px; }
+  .hero { padding-top: 40px; }
+  .bar nav, .seg-label { display: none; }
+  .bar .wrap { gap: 10px; }
+  .seg button { padding: 7px 10px; font-size: 12px; }
+  .seg .long { display: none; }
+  .matrix { grid-template-columns: 64px repeat(3, 1fr); }
+  .cell { padding: 8px; }
+  .cell .k { font-size: 11px; }
+  section.block { padding: 56px 0; }
+}
+@media (prefers-reduced-motion: reduce) { .cell { transition: none; } }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="wrap">
+    <a class="name" href="#top">Crash Recovery</a>
+    <nav aria-label="Sections">
+      <a href="#crashes">Crashes</a>
+      <a href="#signals">Signals</a>
+      <a href="#timing">Timing</a>
+      <a href="#firms">Firms</a>
+      <a href="#data">Data</a>
+    </nav>
+    <div class="switch">
+      <span class="seg-label" id="outcome-label">Outcome</span>
+      <div class="seg" role="group" aria-labelledby="outcome-label" id="outcome">
+        <button type="button" data-v="recovered_12m" aria-pressed="true">Recovered<span class="long"> in 12 months</span></button>
+        <button type="button" data-v="beat_market" aria-pressed="false">Beat SPY</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+  <div class="wrap hero">
+    <div class="hero-grid">
+      <div>
+        <h1>What helped a stock recover from one crash didn't help in the next.</h1>
+        <p class="lede">We trained models on each of three market crashes and tested them on the other two. Inside a crash, a firm's pre-crash financials predict recovery. On a new crash, the same models do no better than a coin flip.</p>
+        <div class="prose">
+          <p>The data covers <strong id="n-rows">10,513</strong> firm-crash rows built from SEC filings for every U.S. public filer, including firms that later failed, across the 2020 COVID-19 crash, the 2022 rate-hike bear market and the 2025 tariff shock.</p>
+          <p>Each square is the model's AUC: the chance it ranks a firm that recovered above one that didn't. 0.5 is a coin flip.</p>
+        </div>
+      </div>
+      <figure style="margin:0">
+        <div class="matrix" id="matrix" aria-describedby="matrix-cap"></div>
+        <div class="scale" aria-hidden="true">
+          <span>0.40</span><div class="ramp" id="ramp"></div><span>0.75</span>
+          <span style="margin-left:8px">Grey is a coin flip; red is worse than one.</span>
+        </div>
+        <div class="matrix-foot">
+          <div><b id="avg-within">0.69</b>average inside a crash</div>
+          <div><b id="avg-across">0.51</b>average on a new crash</div>
+        </div>
+        <figcaption class="sr" id="matrix-cap">LightGBM AUC by training crash (rows) and test crash (columns). The diagonal is 5-fold cross-validation within a crash.</figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <section class="block" id="crashes">
+    <div class="wrap">
+      <h2>Three crashes with three different causes</h2>
+      <div class="prose">
+        <p>COVID-19 was a deep, fast drop. The 2022 rate hikes were a slow grind that took over a year to recover from. The 2025 tariff shock was short and shallow. A signal that predicts recovery in all three would be more likely to be real than one tuned to a single event.</p>
+      </div>
+      <div class="crashes" id="crash-cols"></div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="wrap">
+      <h2>Inside a crash, financials beat a sector-and-size baseline</h2>
+      <div class="prose">
+        <p>Within each crash, LightGBM gains 0.02 to 0.07 AUC over a baseline that knows only sector and size, and the bootstrap interval of that gain excludes zero every time. Trained on the other two crashes, the same model falls below the baseline: pooled over every cross-crash test it scores <strong>0.055 lower</strong> for recovery (95% CI −0.066 to −0.044).</p>
+      </div>
+      <div class="legend" id="dumb-legend" style="margin-top:28px"></div>
+      <div class="dumb" id="dumb"></div>
+    </div>
+  </section>
+
+  <section class="block" id="signals">
+    <div class="wrap">
+      <h2>Why: the same signal points different ways in different crashes</h2>
+      <div class="prose">
+        <p>Each crash has its own leading signals, and some reverse outright. In the 2020 liquidity panic the most volatile stocks fell hardest and bounced back hardest. In 2022 they recovered at half the rate of the calmest third. A model that learned "volatility helps" in 2020 applied that rule in 2022, where volatility hurt.</p>
+      </div>
+      <div class="two">
+        <div>
+          <h3>Most minus least, by feature</h3>
+          <p class="sub">Percentage points between the top and bottom third of firms within each crash. Pick a row to plot it.</p>
+          <table class="ftable" id="ftable" aria-label="Difference in outcome rate between the top and bottom third of each feature, by crash">
+            <thead><tr><th scope="col">Feature</th><th scope="col">2020</th><th scope="col">2022</th><th scope="col">2025</th><th scope="col"><span class="sr">Sign</span></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div style="position:sticky; top:84px">
+          <h3 id="flip-title">Volatility (12 months)</h3>
+          <p class="sub" id="flip-sub">Share of firms that recovered within 12 months, by third of the feature within each crash.</p>
+          <div class="legend crash-legend"></div>
+          <div class="chart"><canvas id="flip-chart" role="img" aria-label="Outcome rate by feature third, one line per crash"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="timing">
+    <div class="wrap">
+      <h2>How long recovery took</h2>
+      <div class="prose">
+        <p>Kaplan–Meier estimates of the share of firms back at their pre-crash price, counting from the market trough. Only failed firms count as never recovering; acquired and otherwise delisted firms leave the count at their last trade. This chart always uses recovery, whatever the outcome switch says.</p>
+      </div>
+      <div class="finder-controls">
+        <label>Firms<select id="km-group"></select></label>
+      </div>
+      <div class="legend crash-legend" id="km-legend"></div>
+      <div class="chart tall"><canvas id="km-chart" role="img" aria-label="Share of firms recovered by days since the market trough, one line per crash"></canvas></div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="wrap">
+      <h2>The best kind of firm to hold changed with the crash</h2>
+      <div class="two" style="margin-top:0">
+        <div class="prose">
+          <p>k-means on the pre-crash financials finds three broad archetypes. They're loose groups (silhouette 0.15), but the archetype mix barely changes between crashes while each archetype's outcome changes a lot.</p>
+          <p>Profitable, cash-generating firms recovered most often in 2020. Large, calm firms led in 2022 and 2025. Loss-making firms fell furthest behind in 2022.</p>
+        </div>
+        <div>
+          <div class="legend crash-legend"></div>
+          <div class="chart"><canvas id="arch-chart" role="img" aria-label="Outcome rate by archetype and crash"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="firms">
+    <div class="wrap">
+      <h2>Look up a firm</h2>
+      <div class="prose"><p>Every firm-crash row in the final table. Drawdown is from the pre-crash price to the stock's own low; "vs SPY" is the firm's return from the peak to 12 months after the trough, minus SPY's.</p></div>
+      <div class="finder-controls">
+        <label>Ticker or company<input type="search" id="q" placeholder="e.g. AAPL or Boeing" autocomplete="off"></label>
+        <label>Crash<select id="f-crash"><option value="">All crashes</option></select></label>
+        <label>Sector<select id="f-sector"><option value="">All sectors</option></select></label>
+        <label>Recovered in 12 months<select id="f-rec"><option value="">Either</option><option value="1">Yes</option><option value="0">No</option></select></label>
+      </div>
+      <div class="tablewrap"><table class="firms" id="firm-table"><thead></thead><tbody></tbody></table></div>
+      <div class="pager"><span id="pager-info" aria-live="polite"></span><span><button type="button" id="prev">Previous</button> <button type="button" id="next">Next</button></span></div>
+    </div>
+  </section>
+
+  <section class="block" id="data">
+    <div class="wrap">
+      <h2>How the table was built</h2>
+      <div class="prose"><p>The universe starts from SEC filers, not today's listings, so firms that later failed stay in. Each row's features are financials filed before the market peak; its labels come from prices after the trough.</p></div>
+      <ol class="steps" id="steps"></ol>
+      <div class="guards">
+        <div><h3>No look-ahead</h3><p>Features use only SEC facts filed before the peak, so later restatements can't leak in. A test checks that no fact or price dated after the peak is used.</p></div>
+        <div><h3>No survivorship bias</h3><p>Dead firms come from SEC records and Tiingo, not current ticker lists. The 3.4% of matched rows still without prices fail more often, and are reported as a limit.</p></div>
+        <div><h3>Right company, right price</h3><p>Reused tickers are caught by matching price levels against SEC records and checking each ticker's issuer at the peak.</p></div>
+        <div><h3>One firm, three crashes</h3><p>71% of rows belong to firms in all three crashes, so cross-validation folds and bootstrap resamples keep each firm's rows together.</p></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Raaj Banga</span>
+    <span><a href="https://github.com/raajbanga/crashRecovery">Code and notebooks</a>&emsp;<a href="https://github.com/raajbanga/crashRecovery/blob/main/report/report.pdf">Report (PDF)</a></span>
+    <span>Built from the repo's processed tables on <span id="built"></span></span>
+  </div>
+</footer>
+
+<script>
+const themeParam = new URLSearchParams(location.search).get("theme");
+if (themeParam === "light" || themeParam === "dark") document.documentElement.dataset.theme = themeParam;
+const D = /*__DATA__*/null;
+
+const CRASH_NAME = ["COVID-19", "Rate hikes", "Tariffs"];
+const CRASH_YEAR = ["2020", "2022", "2025"];
+const CRASH_FACTS = [
+  { when: "Peak 19 Feb 2020 · trough 23 Mar 2020", drop: "−33.9%", vix: "83", back: "about 5 months", note: "A liquidity panic. The riskiest stocks fell hardest and rebounded hardest." },
+  { when: "Peak 3 Jan 2022 · trough 12 Oct 2022", drop: "−25.4%", vix: "36", back: "about 15 months", note: "A slow repricing as rates rose. Fewer than half of firms got back to their pre-crash price within a year." },
+  { when: "Peak 19 Feb 2025 · trough 8 Apr 2025", drop: "−18.9%", vix: "52", back: "under 3 months", note: "A short policy shock. Calm, profitable firms recovered quickest." },
+];
+const OUTCOME_TEXT = { recovered_12m: "recovered within 12 months", beat_market: "beat SPY" };
+
+let outcome = "recovered_12m";
+let feature = "volatility_12m";
+const charts = {};
+
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const crashColor = i => css("--c" + i);
+const pct = (v, d = 0) => (v * 100).toFixed(d) + "%";
+const fmtN = n => n.toLocaleString("en-US");
+
+/* Diverging scale centred on a value: blue above, red below, grey in the middle */
+function diverge(v, centre, span) {
+  const t = Math.max(-1, Math.min(1, (v - centre) / span));
+  const a = Math.abs(t);
+  if (a < 0.12) return { bg: "var(--mid)", fg: "var(--ink)" };
+  const step = a < 0.35 ? 1 : a < 0.6 ? 2 : a < 0.85 ? 3 : 4;
+  const dark = document.documentElement.dataset.theme === "dark" ||
+    (!document.documentElement.dataset.theme && matchMedia("(prefers-color-scheme: dark)").matches);
+  const fg = dark ? (step >= 4 ? "#0f1419" : "#fff") : (step >= 3 ? "#fff" : "var(--ink)");
+  return { bg: `var(--${t > 0 ? "pos" : "neg"}-${step})`, fg };
+}
+
+/* ---------- Transfer matrix ---------- */
+function renderMatrix() {
+  const el = document.getElementById("matrix");
+  const m = D.transfer[outcome].lgbm;
+  const base = D.transfer[outcome].baseline;
+  let h = `<div class="corner"></div><div class="axis-note top">Tested on</div><div class="corner"></div>`;
+  for (let j = 0; j < 3; j++) h += `<div class="colhead">${CRASH_NAME[j]}<br>${CRASH_YEAR[j]}</div>`;
+  for (let i = 0; i < 3; i++) {
+    h += `<div class="rowhead"><span><span class="axis-note">Trained on</span><br>${CRASH_NAME[i]} ${CRASH_YEAR[i]}</span></div>`;
+    for (let j = 0; j < 3; j++) {
+      const v = m[i][j], c = diverge(v, 0.5, 0.25), diag = i === j;
+      const k = diag ? "same crash" : (base ? `baseline ${base[i][j].toFixed(2)}` : (j > i ? "forward" : "backward"));
+      const label = diag
+        ? `Trained and tested on ${CRASH_NAME[i]} ${CRASH_YEAR[i]}: AUC ${v.toFixed(3)}`
+        : `Trained on ${CRASH_NAME[i]} ${CRASH_YEAR[i]}, tested on ${CRASH_NAME[j]} ${CRASH_YEAR[j]}: AUC ${v.toFixed(3)}`;
+      h += `<div class="cell${diag ? " diag" : ""}" style="background:${c.bg};color:${c.fg}" role="img" aria-label="${label}" title="${label}">
+        <span class="v">${v.toFixed(2)}</span><span class="k">${k}</span></div>`;
+    }
+  }
+  el.innerHTML = h;
+  const within = [0, 1, 2].map(i => m[i][i]);
+  const across = m.flatMap((r, i) => r.filter((_, j) => j !== i));
+  const avg = a => a.reduce((s, x) => s + x, 0) / a.length;
+  document.getElementById("avg-within").textContent = avg(within).toFixed(2);
+  document.getElementById("avg-across").textContent = avg(across).toFixed(2);
+}
+document.getElementById("ramp").innerHTML =
+  ["neg-4", "neg-3", "neg-2", "neg-1", "mid", "pos-1", "pos-2", "pos-3", "pos-4"]
+    .map(s => `<span style="background:var(--${s})"></span>`).join("");
+
+/* ---------- Crash columns ---------- */
+function renderCrashes() {
+  document.getElementById("crash-cols").innerHTML = D.summary.map((s, i) => `
+    <div class="crash" style="--cc:var(--c${i})">
+      <h3>${CRASH_NAME[i]} ${CRASH_YEAR[i]}</h3>
+      <div class="when">${CRASH_FACTS[i].when}</div>
+      <dl>
+        <dt>S&amp;P 500 drop</dt><dd>${CRASH_FACTS[i].drop}</dd>
+        <dt>VIX high</dt><dd>${CRASH_FACTS[i].vix}</dd>
+        <dt>Index back at peak</dt><dd>${CRASH_FACTS[i].back}</dd>
+        <dt>Firms in the table</dt><dd>${fmtN(s.n)}</dd>
+        <dt>Median stock drawdown</dt><dd>${pct(s.median_drawdown).replace("-", "−")}</dd>
+        <dt>Recovered in 12 months</dt><dd>${pct(s.recovered_12m)}</dd>
+        <dt>Beat SPY</dt><dd>${pct(s.beat_market)}</dd>
+      </dl>
+      <p>${CRASH_FACTS[i].note}</p>
+    </div>`).join("");
+}
+
+/* ---------- Crash legends (shared) ---------- */
+function renderLegends() {
+  document.querySelectorAll(".crash-legend").forEach(el => {
+    el.innerHTML = [0, 1, 2].map(i => {
+      let extra = "";
+      if (el.id === "km-legend") {
+        const k = D.curves[document.getElementById("km-group").value].crash[D.crashes[i]];
+        extra = ` · ${k.median ? "median " + k.median + " days" : "median not reached"} · ${fmtN(k.n)} firms`;
+      }
+      return `<span style="--cc:var(--c${i})"><i></i>${CRASH_NAME[i]} ${CRASH_YEAR[i]}${extra}</span>`;
+    }).join("");
+  });
+}
+
+/* ---------- Dumbbell: baseline vs LightGBM within vs LightGBM on a new crash ---------- */
+function renderDumbbell() {
+  const box = document.getElementById("dumb");
+  const W = Math.max(320, box.clientWidth || 1000), narrow = W < 600;
+  const rowH = 64, top = 30, left = narrow ? 44 : 150, right = narrow ? 34 : 30;
+  const H = top + rowH * 3 + 34;
+  const x0 = 0.38, x1 = 0.76;
+  const X = v => left + (v - x0) / (x1 - x0) * (W - left - right);
+  const base = D.within[outcome].baseline, lgbm = D.within[outcome].lgbm, other = D.otherTwo[outcome];
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="AUC by crash for the baseline, LightGBM within the crash, and LightGBM trained on the other two crashes">`;
+  for (let t = 0.4; t <= 0.751; t += narrow ? 0.1 : 0.05) {
+    const x = X(t);
+    s += `<line x1="${x}" x2="${x}" y1="${top - 10}" y2="${H - 30}" stroke="var(--grid)" stroke-width="1"/>`;
+    s += `<text class="tick" x="${x}" y="${H - 10}" text-anchor="middle">${t.toFixed(2)}</text>`;
+  }
+  s += `<line x1="${X(0.5)}" x2="${X(0.5)}" y1="${top - 14}" y2="${H - 30}" stroke="var(--ink-2)" stroke-width="1.5" stroke-dasharray="4 4"/>`;
+  s += `<text class="tick" x="${X(0.5) + 6}" y="${top - 4}">coin flip</text>`;
+  for (let i = 0; i < 3; i++) {
+    const y = top + rowH * i + rowH / 2, col = `var(--c${i})`;
+    s += `<text x="0" y="${y + 4}">${narrow ? CRASH_YEAR[i] : CRASH_NAME[i] + " " + CRASH_YEAR[i]}</text>`;
+    s += `<line x1="${X(other[i][0])}" x2="${X(lgbm[i])}" y1="${y}" y2="${y}" stroke="var(--axis)" stroke-width="2"/>`;
+    s += `<line x1="${X(other[i][1])}" x2="${X(other[i][2])}" y1="${y}" y2="${y}" stroke="var(--ink-2)" stroke-width="3" stroke-linecap="round"/>`;
+    s += `<rect x="${X(other[i][0]) - 2}" y="${y - 9}" width="4" height="18" rx="1" fill="var(--ink-2)"><title>LightGBM trained on the other two crashes: ${other[i][0].toFixed(3)} (95% CI ${other[i][1].toFixed(3)} to ${other[i][2].toFixed(3)})</title></rect>`;
+    s += `<circle cx="${X(base[i])}" cy="${y}" r="7" fill="var(--surface)" stroke="var(--ink-2)" stroke-width="2"><title>Baseline within the crash: ${base[i].toFixed(3)}</title></circle>`;
+    s += `<circle cx="${X(lgbm[i])}" cy="${y}" r="8" fill="${col}" stroke="var(--plane)" stroke-width="2"><title>LightGBM within the crash: ${lgbm[i].toFixed(3)}</title></circle>`;
+    s += `<text class="tick" x="${X(lgbm[i]) + 14}" y="${y + 4}">${lgbm[i].toFixed(2)}</text>`;
+    s += `<text class="tick" x="${X(other[i][0])}" y="${y + 24}" text-anchor="middle">${other[i][0].toFixed(2)}</text>`;
+  }
+  s += `</svg>`;
+  document.getElementById("dumb").innerHTML = s;
+  document.getElementById("dumb-legend").innerHTML =
+    `<span><i class="ring"></i>Baseline (sector, size), within the crash</span>` +
+    `<span><i class="dot" style="background:var(--ink-2)"></i>LightGBM within the crash (coloured by crash)</span>` +
+    `<span><i class="bar"></i>LightGBM trained on the other two crashes, with 95% CI</span>`;
+}
+
+/* ---------- Feature flip table + chart ---------- */
+function spreads(f) {
+  return D.crashes.map(c => { const r = D.terciles[f][c][outcome]; return r[2] - r[0]; });
+}
+function renderFeatureTable() {
+  const tb = document.querySelector("#ftable tbody");
+  const rows = Object.entries(D.features).map(([k, name]) => {
+    const sp = spreads(k);
+    const flips = sp.some(v => v > 0.03) && sp.some(v => v < -0.03);
+    return { k, name, sp, flips, mag: Math.max(...sp.map(Math.abs)) };
+  }).sort((a, b) => (b.flips - a.flips) || (b.mag - a.mag));
+  tb.innerHTML = rows.map(r => `
+    <tr data-k="${r.k}" tabindex="0" aria-selected="${r.k === feature}">
+      <td>${r.name}</td>
+      ${r.sp.map((v, i) => { const c = diverge(v, 0, 0.3);
+        return `<td class="sp" style="background:${c.bg};color:${c.fg}" title="${CRASH_NAME[i]} ${CRASH_YEAR[i]}: ${(v * 100).toFixed(1)} points">${v >= 0 ? "+" : "−"}${Math.abs(v * 100).toFixed(0)}</td>`; }).join("")}
+      <td class="flag${r.flips ? " on" : ""}">${r.flips ? "flips" : ""}</td>
+    </tr>`).join("");
+}
+document.querySelector("#ftable tbody").addEventListener("click", e => {
+  const tr = e.target.closest("tr"); if (!tr) return;
+  feature = tr.dataset.k; renderFeatureTable(); updateFlipChart();
+});
+document.querySelector("#ftable tbody").addEventListener("keydown", e => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const tr = e.target.closest("tr"); if (!tr) return;
+  e.preventDefault(); feature = tr.dataset.k; renderFeatureTable(); updateFlipChart();
+  document.querySelector(`#ftable tr[data-k="${feature}"]`).focus();
+});
+
+/* ---------- Chart.js common ---------- */
+function baseOptions() {
+  Chart.defaults.font.family = css("--sans");
+  Chart.defaults.color = css("--muted");
+  return {
+    responsive: true, maintainAspectRatio: false, animation: { duration: 350 },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: css("--surface"), titleColor: css("--ink"), bodyColor: css("--ink-2"),
+        borderColor: css("--rule"), borderWidth: 1, padding: 10, boxPadding: 4, usePointStyle: true,
+      },
+    },
+    scales: {
+      x: { grid: { color: css("--grid") }, border: { color: css("--axis") }, ticks: { color: css("--muted") } },
+      y: { grid: { color: css("--grid") }, border: { display: false }, ticks: { color: css("--muted") } },
+    },
+  };
+}
+
+function flipData() {
+  return D.crashes.map((c, i) => ({
+    label: `${CRASH_NAME[i]} ${CRASH_YEAR[i]}`,
+    data: D.terciles[feature][c][outcome].map(v => v * 100),
+    borderColor: crashColor(i), backgroundColor: crashColor(i),
+    borderWidth: 2, pointRadius: 5, pointHoverRadius: 7,
+    pointBorderColor: css("--plane"), pointBorderWidth: 2, tension: 0,
+  }));
+}
+function buildFlipChart() {
+  const o = baseOptions();
+  o.interaction = { mode: "index", intersect: false };
+  o.scales.y.min = 0; o.scales.y.max = 100;
+  o.scales.y.ticks.callback = v => v + "%";
+  o.scales.x.grid.display = false;
+  o.plugins.tooltip.callbacks = { label: c => ` ${c.dataset.label}: ${c.parsed.y.toFixed(0)}%` };
+  o.layout = { padding: { right: 8 } };
+  charts.flip = new Chart(document.getElementById("flip-chart"), {
+    type: "line",
+    data: { labels: ["Lowest third", "Middle third", "Highest third"], datasets: flipData() },
+    options: o,
+  });
+}
+function updateFlipChart() {
+  document.getElementById("flip-title").textContent = D.features[feature];
+  document.getElementById("flip-sub").textContent =
+    `Share of firms that ${OUTCOME_TEXT[outcome]}, by third of ${D.features[feature].toLowerCase()} within each crash.`;
+  charts.flip.data.datasets = flipData();
+  charts.flip.update();
+}
+
+/* ---------- Kaplan–Meier ---------- */
+function kmData() {
+  const g = D.curves[document.getElementById("km-group").value];
+  return D.crashes.map((c, i) => ({
+    label: `${CRASH_NAME[i]} ${CRASH_YEAR[i]}`,
+    data: g.crash[c].t.map((t, k) => ({ x: t, y: g.crash[c].y[k] * 100 })),
+    borderColor: crashColor(i), backgroundColor: crashColor(i),
+    borderWidth: 2, pointRadius: 0, pointHoverRadius: 5, stepped: true,
+  }));
+}
+function buildKM() {
+  const sel = document.getElementById("km-group");
+  if (!sel.options.length) {
+    const groups = Object.entries(D.curves);
+    const add = (label, filter) => {
+      const og = document.createElement("optgroup"); og.label = label;
+      groups.filter(([k]) => filter(k)).forEach(([k, v]) => og.append(new Option(v.name, k)));
+      sel.append(og);
+    };
+    sel.append(new Option("All firms", "all"));
+    add("Archetype", k => k.startsWith("arch:"));
+    add("Sector", k => k.startsWith("sector:"));
+    sel.addEventListener("change", () => { charts.km.data.datasets = kmData(); charts.km.update(); renderLegends(); });
+  }
+  const o = baseOptions();
+  o.interaction = { mode: "index", intersect: false, axis: "x" };
+  o.scales.x.type = "linear"; o.scales.x.min = 0; o.scales.x.max = 549;
+  o.scales.x.ticks.stepSize = 90;
+  o.scales.x.title = { display: true, text: "Days since the market trough", color: css("--muted") };
+  o.scales.y.min = 0; o.scales.y.max = 100;
+  o.scales.y.ticks.callback = v => v + "%";
+  o.plugins.tooltip.callbacks = {
+    title: items => `Day ${items[0].parsed.x}`,
+    label: c => ` ${c.dataset.label}: ${c.parsed.y.toFixed(0)}% recovered`,
+  };
+  charts.km = new Chart(document.getElementById("km-chart"), { type: "line", data: { datasets: kmData() }, options: o });
+}
+
+/* ---------- Archetypes ---------- */
+function archLabel(n) { return n.replace(/^A\d: /, "").replace(/^./, c => c.toUpperCase()); }
+function archData() {
+  return D.crashes.map((c, i) => ({
+    label: `${CRASH_NAME[i]} ${CRASH_YEAR[i]}`,
+    data: D.archetypes.map(a => a[outcome][i] * 100),
+    backgroundColor: crashColor(i), borderColor: css("--plane"), borderWidth: { left: 1, right: 1 },
+    borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: "bottom",
+    barPercentage: 0.88, categoryPercentage: 0.72,
+  }));
+}
+function buildArch() {
+  const o = baseOptions();
+  o.scales.y.min = 0; o.scales.y.max = 100;
+  o.scales.y.ticks.callback = v => v + "%";
+  o.scales.x.grid.display = false;
+  o.scales.x.ticks.autoSkip = false;
+  o.plugins.tooltip.callbacks = { label: c => ` ${c.dataset.label}: ${c.parsed.y.toFixed(0)}%` };
+  charts.arch = new Chart(document.getElementById("arch-chart"), {
+    type: "bar",
+    data: { labels: D.archetypes.map(a => archLabel(a.name).split(", ")), datasets: archData() },
+    options: o,
+  });
+}
+
+/* ---------- Firm finder ---------- */
+const F = D.firms;
+const N = F.ticker.length;
+const COLS = [
+  { k: "ticker", label: "Ticker" },
+  { k: "name", label: "Company" },
+  { k: "crash", label: "Crash" },
+  { k: "sector", label: "Sector" },
+  { k: "arch", label: "Archetype" },
+  { k: "dd", label: "Drawdown", num: true },
+  { k: "rec", label: "Recovered in 12 months" },
+  { k: "days", label: "Days to recover", num: true },
+  { k: "xs", label: "vs SPY", num: true },
+  { k: "exit", label: "Exit" },
+];
+const ARCH_SHORT = { A0: "Profitable", A1: "Loss-making", A2: "Large, calm" };
+const EXIT = { none: "", acquired: "Acquired", failed: "Failed", delisted_other: "Delisted" };
+let sortK = "ticker", sortDir = 1, page = 0, view = [];
+const PAGE = 25;
+
+function setupFinder() {
+  const fc = document.getElementById("f-crash");
+  D.crashes.forEach((c, i) => fc.append(new Option(`${CRASH_NAME[i]} ${CRASH_YEAR[i]}`, i)));
+  const fs = document.getElementById("f-sector");
+  [...new Set(F.sector)].sort().forEach(s => fs.append(new Option(s, s)));
+  const thead = document.querySelector("#firm-table thead");
+  thead.innerHTML = "<tr>" + COLS.map(c =>
+    `<th scope="col" class="${c.num ? "num" : ""}" aria-sort="none"><button type="button" data-k="${c.k}">${c.label}</button></th>`).join("") + "</tr>";
+  thead.addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (sortK === b.dataset.k) sortDir = -sortDir; else { sortK = b.dataset.k; sortDir = COLS.find(c => c.k === sortK).num ? 1 : 1; }
+    page = 0; filterFirms();
+  });
+  let t;
+  document.getElementById("q").addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => { page = 0; filterFirms(); }, 120); });
+  ["f-crash", "f-sector", "f-rec"].forEach(id => document.getElementById(id).addEventListener("change", () => { page = 0; filterFirms(); }));
+  document.getElementById("prev").addEventListener("click", () => { page--; renderFirms(); });
+  document.getElementById("next").addEventListener("click", () => { page++; renderFirms(); });
+  filterFirms();
+}
+function filterFirms() {
+  const q = document.getElementById("q").value.trim().toLowerCase();
+  const fc = document.getElementById("f-crash").value, fs = document.getElementById("f-sector").value, fr = document.getElementById("f-rec").value;
+  view = [];
+  for (let i = 0; i < N; i++) {
+    if (fc !== "" && F.crash[i] !== +fc) continue;
+    if (fs && F.sector[i] !== fs) continue;
+    if (fr !== "" && F.rec[i] !== +fr) continue;
+    if (q && !(F.ticker[i].toLowerCase().startsWith(q) || F.name[i].toLowerCase().includes(q))) continue;
+    view.push(i);
+  }
+  // exact ticker matches first when searching
+  const col = F[sortK];
+  view.sort((a, b) => {
+    if (q) { const ea = F.ticker[a].toLowerCase() === q, eb = F.ticker[b].toLowerCase() === q; if (ea !== eb) return eb - ea; }
+    const va = col[a], vb = col[b];
+    if (va === vb) return F.crash[a] - F.crash[b];
+    if (va === null) return 1; if (vb === null) return -1;
+    return (va < vb ? -1 : 1) * sortDir;
+  });
+  document.querySelectorAll("#firm-table th").forEach(th => {
+    const k = th.querySelector("button").dataset.k;
+    th.setAttribute("aria-sort", k === sortK ? (sortDir > 0 ? "ascending" : "descending") : "none");
+    th.querySelector("button").textContent = COLS.find(c => c.k === k).label + (k === sortK ? (sortDir > 0 ? " ↑" : " ↓") : "");
+  });
+  renderFirms();
+}
+function signed(v) { return (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v / 10).toFixed(0) + "%"; }
+function esc(s) { return s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]); }
+function renderFirms() {
+  const pages = Math.max(1, Math.ceil(view.length / PAGE));
+  page = Math.max(0, Math.min(page, pages - 1));
+  const rows = view.slice(page * PAGE, page * PAGE + PAGE);
+  document.querySelector("#firm-table tbody").innerHTML = rows.length ? rows.map(i => `
+    <tr>
+      <td class="tk">${esc(F.ticker[i])}</td>
+      <td class="nm" title="${esc(F.name[i])}">${esc(F.name[i])}</td>
+      <td><span class="cdot" style="--cc:var(--c${F.crash[i]})"></span>${CRASH_YEAR[F.crash[i]]}</td>
+      <td>${esc(F.sector[i])}</td>
+      <td>${ARCH_SHORT[F.arch[i]] || ""}</td>
+      <td class="num">${signed(F.dd[i])}</td>
+      <td class="${F.rec[i] ? "yes" : "no"}">${F.rec[i] ? "Yes" : "No"}</td>
+      <td class="num">${F.days[i] === null ? '<span class="no">—</span>' : F.days[i]}</td>
+      <td class="num">${F.xs[i] === null ? "" : signed(F.xs[i])}</td>
+      <td>${EXIT[F.exit[i]] ?? ""}</td>
+    </tr>`).join("") : `<tr><td colspan="${COLS.length}" style="padding:28px 14px;color:var(--ink-2)">No firms match. Try a shorter name or clear a filter.</td></tr>`;
+  document.getElementById("pager-info").textContent = view.length
+    ? `Showing ${fmtN(page * PAGE + 1)}–${fmtN(page * PAGE + rows.length)} of ${fmtN(view.length)} rows`
+    : "0 rows";
+  document.getElementById("prev").disabled = page === 0;
+  document.getElementById("next").disabled = page >= pages - 1;
+}
+
+/* ---------- Pipeline steps ---------- */
+function renderSteps() {
+  const L = D.funnelLabels;
+  const sumAt = i => +L.covid_2020[i] + +L.rates_2022[i] + +L.tariff_2025[i];
+  const steps = [
+    ["SEC filers with public stock", 15291],
+    ["Ticker matched to the firm at the peak", 13392],
+    ["Price series checked against SEC prices", 12931],
+    ["Common stock, at least $1 and $10M, actively traded", sumAt(L.step.length - 1)],
+    ["Final table, business development companies removed", D.firms.ticker.length],
+  ];
+  const max = steps[0][1];
+  document.getElementById("steps").innerHTML = steps.map(([l, v], i) => `
+    <li><span class="n">${i + 1}</span><span class="lbl">${l}</span>
+    <span class="track"><span class="fill" style="display:block;width:${(v / max * 100).toFixed(1)}%"></span></span>
+    <span class="val">${fmtN(v)}</span></li>`).join("");
+}
+
+/* ---------- Outcome switch ---------- */
+document.getElementById("outcome").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b || b.dataset.v === outcome) return;
+  outcome = b.dataset.v;
+  document.querySelectorAll("#outcome button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  renderMatrix(); renderDumbbell(); renderFeatureTable(); updateFlipChart();
+  charts.arch.data.datasets = archData(); charts.arch.update();
+});
+
+/* ---------- Build ---------- */
+function buildCharts() {
+  Object.values(charts).forEach(c => c.destroy());
+  buildFlipChart(); buildKM(); buildArch();
+  updateFlipChart();
+}
+renderMatrix(); renderCrashes(); renderDumbbell(); renderFeatureTable();
+buildCharts(); renderLegends(); setupFinder(); renderSteps();
+document.getElementById("n-rows").textContent = fmtN(N);
+document.getElementById("built").textContent = D.built;
+let rw; addEventListener("resize", () => { clearTimeout(rw); rw = setTimeout(renderDumbbell, 150); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { buildCharts(); renderMatrix(); renderFeatureTable(); });
+</script>
+</body>
+</html>
