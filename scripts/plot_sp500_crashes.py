@@ -1,4 +1,4 @@
-# Figures for the README.
+# S&P 500 indexed to each crash's peak (used on the slides).
 # python 3.14.10, pandas 2.3.3, matplotlib 3.11.2
 # Output: figures/sp500_crashes.png
 import matplotlib.pyplot as plt
