@@ -6,7 +6,7 @@ This project predicts whether a U.S. public company's stock gets back to its pre
 
 **[Interactive results →](https://raajbanga.github.io/crashRecovery/)** Explore the transfer matrix, recovery curves, and all 10,513 firm-crash rows.
 
-A full write-up is in [`report/report.pdf`](report/report.pdf), and a 14-slide summary is in [`slides/crash_recovery.pptx`](slides/crash_recovery.pptx).
+A full write-up is in [`report/report.pdf`](report/report.pdf), and a 17-slide deck on how the data was built and the models were tested is in [`slides/crash_recovery.pptx`](slides/crash_recovery.pptx) ([PDF](slides/crash_recovery.pdf)).
 
 ![LightGBM AUC by training crash and test crash](figures/transfer_auc.png)
 
@@ -108,20 +108,22 @@ cd scripts
 
 ```
 scripts/
-  01–05d_*.py           download SEC, FRED, fails-to-deliver, and price data; match and verify tickers
-  06_build_labels.py    clean prices, apply filters, build recovery labels and exit status
-  07_build_features.py  point-in-time features from SEC filings and prices
-  check_data.py         checks on the final table
-  helpers.py            shared plotting style, model pipeline, DeLong test, grouped bootstrap
-  build_site.py         builds docs/index.html from the processed tables
-  plot_sp500_crashes.py S&P 500 crash-path figure for the slides
-notebooks/              01_explore, 02_classification, 03_patterns, 04_survival
-data/interim/           intermediate tables (universe, ticker map, price checks, filter counts)
-data/processed/         firm_crash.parquet (final table), labels.parquet, archetypes.parquet
-figures/                figures used in the report, slides, and README
-docs/                   interactive results page (GitHub Pages)
-report/                 LaTeX report (build with `tectonic report.tex`)
-slides/                 slide deck and the script that builds it
+  01–05d_*.py            download SEC, FRED, fails-to-deliver, and price data; match and verify tickers
+  06_build_labels.py     clean prices, apply filters, build recovery labels and exit status
+  07_build_features.py   point-in-time features from SEC filings and prices
+  check_data.py          checks on the final table
+  helpers.py             shared plotting style, model pipeline, DeLong test, grouped bootstrap
+  build_site.py          builds docs/index.html from the processed tables
+  plot_sp500_crashes.py  S&P 500 crash-path figure for the slides
+  plot_method_figures.py label and price-check figures for the slides and report
+  plot_slide_figures.py  dark versions of the deck's figures (figures/slides/)
+notebooks/               01_explore, 02_classification, 03_patterns, 04_survival
+data/interim/            intermediate tables (universe, ticker map, price checks, filter counts)
+data/processed/          firm_crash.parquet (final table), labels.parquet, archetypes.parquet
+figures/                 figures for the report and README; figures/slides/ for the deck
+docs/                    interactive results page (GitHub Pages)
+report/                  LaTeX report (build with `tectonic report.tex`)
+slides/                  slide deck (pptx and PDF) and the script that builds it
 ```
 
 ## Data sources

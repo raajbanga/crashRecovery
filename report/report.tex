@@ -90,14 +90,51 @@ These studies each cover a single crash, so they cannot tell whether cash matter
 FRED does not carry firm-level data, so prices come from Yahoo and Tiingo and industry codes from the SEC.
 
 \subsection{Building the firm-crash table}
-Each row is one firm in one crash. Table~\ref{tab:funnel} shows how many rows survive each step.
+Each row is one firm in one crash. Five numbered scripts build the table, one step each, and Table~\ref{tab:funnel} shows how many rows survive each step. An automated script runs 34 checks on the final table.
 
+\textbf{Universe.} We start from SEC filers before each peak, not today's stock listings. A list of current tickers only contains survivors, so firms that later failed would quietly drop out; starting from filers keeps them in.
 \begin{itemize}
-  \item \textbf{Universe.} We start from SEC filers before each peak rather than today's stock listings, so firms that later failed stay in. We require a 10-K (which excludes foreign filers on Form 20-F) and remove SPACs and firms without public stock.
-  \item \textbf{Tickers.} SEC filings identify firms by an ID (CIK), not a ticker. We use the SEC's current ticker, and for dead firms we match names in the fails files, which also link old tickers to new ones (\texttt{SIVB} to \texttt{SIVBQ}). Tickers get reused, so each ticker must belong to the same issuer, under a name the firm used at the peak. This check found 11 rows priced as a different company (Ambac's old ticker now belongs to Overseas Shipholding).
-  \item \textbf{Price check.} Each price series is compared with the fails files' recorded prices around the peak. At least 80\% of dates must agree, allowing for one split. 96.6\% of matched rows end up with a checked price.
-  \item \textbf{Filters.} We keep common stock only, with a pre-crash price of at least \$1 before split adjustment, a market value of at least \$10M, and trading on at least 70\% of days in the year before the peak. We also drop 46 business development companies.
-  \item \textbf{Price cleaning.} One-day spikes above 50\% that are mostly undone the next day are removed. A missed reverse split is fixed only when SEC share counts confirm it (18 rows).
+  \item A firm needs a recent 10-K filed before the peak. This excludes foreign filers, which file Form 20-F.
+  \item SPACs are removed three ways: SIC code 6770, most assets held in trust, or a SPAC-style name at the peak. Flagging any trust account alone wrongly removed Exelon and Aon, so the rule requires \emph{most} assets in trust.
+  \item Funds and asset-backed issuers are removed.
+  \item A firm must have public stock: a public float above zero \emph{or} a current common-stock ticker. Float alone wrongly removed Fox and Tyson, which report no float on some filings.
+\end{itemize}
+
+\textbf{Tickers.} SEC filings identify firms by an ID (CIK), but prices need a ticker. 10,466 rows use the SEC's current ticker, 2,917 come from matching names in the fails files, and 9 were set by hand. The fails files also link old and new tickers by CUSIP (\texttt{SIVB} to \texttt{SIVBQ}), which is how failed firms get a price series.
+\begin{itemize}
+  \item \textbf{Identity check.} Tickers get reused: in 2022, \texttt{META} was Meta Materials, not Meta Platforms. So each ticker is looked up in the fails file at the peak. Its issuer code (the first six characters of the CUSIP) and name must match the firm, using any name the firm used within 270 days of the peak. This skipped 36 rows and found 11 labeled rows that had been priced as another company (Ambac's old ticker belonged to Overseas Shipholding).
+  \item A hand check of 100 random name matches found none wrong. 7.5\% of rows have no fails record at the peak and can't be identity-checked.
+\end{itemize}
+
+\textbf{Price check.} Even with the right ticker, a downloaded series can belong to another company, so every series is checked against the fails files' own recorded prices (Figure~\ref{fig:pricecheck}).
+\begin{itemize}
+  \item Within 270 days of the peak, the series and the SEC price are compared on each fails date. They agree if they are within 3\% (5\% under \$5, 10\% under \$1). One split is allowed, since Yahoo's prices are split-adjusted and the SEC's are not.
+  \item At least 80\% of dates must agree.
+  \item The check compares price \emph{levels}. An earlier version compared daily moves, and it passed the wrong company for calm stocks, whose daily moves all look alike.
+  \item Yahoo is tried first, and Tiingo covers firms that have left the market. On the 428 tickers both sources carry, daily returns match exactly on 98\% of days for the median ticker, so the two can be mixed.
+\end{itemize}
+96.6\% of matched rows end up with a checked price.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.92\textwidth]{price_check_example.png}
+\caption{The price check on a reused ticker. Before July 2020, \texttt{CZR} was the old Caesars; Yahoo's \texttt{CZR} history belongs to Eldorado Resorts, which took the name. In 2020 only 37\% of fails dates agree, so the series is rejected. In 2022 the same ticker belongs to the right firm and every date agrees.}
+\label{fig:pricecheck}
+\end{figure}
+
+\textbf{Price cleaning.} A bad print looks like a crash or a recovery that never happened, so prices are cleaned before any label is built.
+\begin{itemize}
+  \item A one-day move above 50\% that is at least 75\% undone the next day is removed (550 kept rows lost at least one day).
+  \item A missed reverse split is fixed only when the SEC's reported share counts fall by the same ratio (18 rows). Fixing on price alone would have ``corrected'' real collapses, such as Novavax's, and drops are never fixed.
+\end{itemize}
+
+\textbf{Filters.}
+\begin{itemize}
+  \item Keep common stock only.
+  \item Require a pre-crash price of at least \$1 before split adjustment. The raw price is Yahoo's close times its split history, and it agrees with the SEC's fails prices on 99.4\% of rows that have both.
+  \item Require a market value of at least \$10M.
+  \item Drop stale series, where more than 30\% of days in the year before the peak were unchanged or untraded (554 rows).
+  \item Drop 46 business development companies, which are funds.
 \end{itemize}
 
 \begin{table}[h]
@@ -118,41 +155,77 @@ Final table (business development companies removed) & 3,216 & 3,599 & 3,698 & 1
 \end{table}
 
 \subsection{Labels}
+Every firm in a crash is measured from the same market dates, the S\&P 500's peak and trough (Figure~\ref{fig:label}).
 \begin{itemize}
-  \item \textbf{Pre-crash price:} the highest adjusted close in the 30 trading days up to the market peak.
+  \item \textbf{Pre-crash price:} the highest adjusted close in the 30 trading days up to the market peak. A single day's close would let a dip on that day make recovery too easy.
   \item \textbf{Recovered within 12 months} (main label): the stock closes at or above its pre-crash price within 12 months of the market trough. Base rates are 75.6\% (2020), 42.8\% (2022), and 69.2\% (2025).
-  \item \textbf{Beat the market} (second label): the firm's return from the peak to 12 months after the trough beats SPY's. A firm that stops trading keeps its last price. Base rates are 47.7\%, 32.0\%, and 38.4\%.
-  \item \textbf{Days to recovery} (for survival analysis): capped at 18 months. Only failed firms count as never recovering; acquired and otherwise delisted firms are censored at their last trade.
+  \item \textbf{Beat the market} (second label): the firm's return from the peak to 12 months after the trough beats SPY's. A firm that stops trading keeps its last price, as if the money sat in cash, so a bankruptcy counts as a loss. Base rates are 47.7\%, 32.0\%, and 38.4\%.
+  \item \textbf{Days to recovery} (for survival analysis): capped at 18 months. Only failed firms (an 8-K bankruptcy filing followed by a delisting) count as never recovering. Acquired and otherwise delisted firms are censored at their last trade, since a buyout is not a failure.
+  \item \textbf{Drawdown} (descriptive): the lowest close from the peak to 3 months after the trough, relative to the pre-crash price. Medians are $-51\%$ (2020), $-42\%$ (2022), and $-33\%$ (2025).
+  \item \textbf{Exit status}: failed (93 rows), acquired (533), other delisting (37), or still trading (9,850), from SEC Form 25 and 8-K filings. It sets the censoring above and is used in the robustness checks.
 \end{itemize}
 
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{label_example.png}
+\caption{The main label on two stocks in the 2022 crash, each divided by its pre-crash price. Apple got back on day 233 after the trough, inside the 12-month window; Disney did not.}
+\label{fig:label}
+\end{figure}
+
 \subsection{Features}
-There are 16 features. Twelve come from SEC filings: current ratio, cash, debt, and liabilities to assets, interest coverage, net and operating margin, return on assets, operating cash flow to assets, revenue and asset growth, and log assets. Four come from prices: log market value, 12-month volatility, momentum from 12 months to 1 month before the peak, and beta against SPY. Sector is the SIC division.
+There are 16 features. Twelve come from SEC filings: current ratio, cash, debt, and liabilities to assets, interest coverage, net and operating margin, return on assets, operating cash flow to assets, revenue and asset growth, and log assets. Four come from prices up to the peak: log market value, 12-month volatility, momentum from 12 months to 1 month before the peak, and beta against SPY. Sector is the SIC division (about 10 groups).
 \begin{itemize}
-  \item \textbf{Point in time.} Only facts filed before the peak are used, so later restatements cannot leak in. Flows are trailing 12 months. An automated test confirms that no fact filed and no price dated after the peak is used.
-  \item \textbf{Missing values} are kept as missing with a flag. Some gaps are by design: current ratio and interest coverage are left missing for financial firms, and margins need positive revenue.
+  \item \textbf{Point in time.} A fact counts only if it was filed before the peak and its period ended at most 550 days before the peak. For each period, the latest value filed before the peak wins, so later restatements cannot leak in. An automated test confirms that no fact filed and no price dated after the peak is used.
+  \item \textbf{Trailing 12 months.} Flows such as revenue are the last full year, plus this year to date, minus the same period a year earlier. Hand checks match exactly (Apple's revenue of \$267.68B and AAR's operating cash flow before the 2020 peak).
+  \item \textbf{Missing values} are kept as missing with a flag, not set to zero. Some gaps are by design: current ratio and interest coverage are left missing for financial firms, where they mean little, and margins need positive revenue.
   \item \textbf{Firm overlap.} 71\% of rows belong to firms that appear in all three crashes, so all cross-validation folds and bootstrap resamples keep each firm's rows together.
 \end{itemize}
 
 % ---------------- 4. Methodology ----------------
 \section{Approach and methodology}
 
-\textbf{Models.} We compare a baseline logistic regression that only sees sector and size (log assets, log market value) with three full models: logistic regression, random forest~\cite{breiman2001}, and LightGBM~\cite{ke2017}. Hyperparameters are fixed and regularized, not tuned, and classes are balanced with class weights. Inside each pipeline, fitted on training rows only, ratios are capped at the 1st and 99th percentiles, then missing values are filled with the median.
-
-\textbf{Evaluation design.} We use two settings.
+\textbf{Evaluation design.} The question is whether a model learned in one crash works in the next, so the design has two settings.
 \begin{itemize}
   \item \textbf{Within a crash:} 5-fold cross-validation, stratified by label and grouped by firm.
-  \item \textbf{Across crashes:} train on one crash and test on each other crash, and also train on two crashes and test on the third.
+  \item \textbf{Across crashes:} train on one crash and test on each other crash, and also train on two crashes and test on the third. Training on an earlier crash and testing on a later one is the realistic use case.
 \end{itemize}
-The main metric is AUC, the probability that the model ranks a random recovering firm above a random non-recovering one (0.5 is chance). We use AUC because base rates range from 43\% to 76\%: always predicting ``recovers'' would score 76\% accuracy in 2020.
+The main metric is AUC, the probability that the model ranks a random recovering firm above a random non-recovering one (0.5 is chance). We use AUC because base rates range from 43\% to 76\%: always predicting ``recovers'' would score 76\% accuracy in 2020. PR-AUC, Brier score, and accuracy are reported alongside it in the notebooks.
 
-\textbf{Statistics.} Each model is compared with the baseline on the same test rows using DeLong tests~\cite{delong1988,sun2014}, with Holm's correction across all 72 comparisons~\cite{holm1979}. Confidence intervals come from a bootstrap that resamples whole firms. Feature importance is the mean absolute SHAP value~\cite{lundberg2017}. A feature counts as \emph{universal} if it ranks in the top 5 in all three crashes with the same sign. We compare importance rankings across crashes with Spearman correlation.
+\textbf{Models.} We compare a baseline logistic regression that only sees sector and size (log assets, log market value) with three full models: logistic regression, random forest~\cite{breiman2001}, and LightGBM~\cite{ke2017} (Table~\ref{tab:models}). The baseline matters because large firms in some sectors recover more regardless of their finances; the question is what fundamentals add on top. Every model uses the same preprocessing, fitted on training rows only:
+\begin{enumerate}[itemsep=0pt]
+  \item cap ratios at the training 1st and 99th percentiles;
+  \item fill missing values with the training median, and add a missing flag;
+  \item scale (logistic models only);
+  \item one-hot encode the sector.
+\end{enumerate}
+Fitting these steps on training rows means the test crash never shapes its own preprocessing. Classes are balanced with class weights.
 
-\textbf{Patterns and timing.}
+Hyperparameters are fixed and regularized, not tuned. Tuning on one crash would pick the settings that best fit that crash, which is exactly the bias the cross-crash test is meant to expose, and fixed settings keep every comparison on equal terms.
+
+\begin{table}[h]
+\centering\small
+\caption{Models and their fixed settings.}
+\label{tab:models}
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+Model & Inputs & Settings \\
+\midrule
+Baseline (logistic) & sector, log assets, log market value & $C = 0.5$ \\
+Logistic regression & 16 features, missing flags, sector & $C = 0.5$ \\
+Random forest & same & 500 trees, minimum leaf 20 \\
+LightGBM & same & 300 trees, 15 leaves, learning rate 0.03, 80\% row and column sampling \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\textbf{Statistics.} Each model is compared with the baseline on the same test rows using DeLong tests~\cite{delong1988,sun2014}, which allow for the two ROC curves coming from the same firms. Holm's correction~\cite{holm1979} is applied across all 72 comparisons (models, labels, and train-test pairs). Confidence intervals come from a bootstrap that resamples whole firms, for the same reason folds are grouped by firm. Feature importance is the mean absolute SHAP value~\cite{lundberg2017}. A feature counts as \emph{universal} if it ranks in the top 5 in all three crashes with the same sign. We compare importance rankings across crashes with Spearman correlation.
+
+\textbf{Patterns and timing.} Each secondary method checks the main result from another angle.
 \begin{itemize}
-  \item \textbf{Archetypes:} k-means on within-crash percentiles, with $k$ chosen by silhouette among stable solutions, checked against HDBSCAN~\cite{campello2013}.
-  \item \textbf{Recovery rules:} FP-Growth association rules~\cite{han2000}.
-  \item \textbf{Unusual firms:} Isolation Forest~\cite{liu2008} and LOF~\cite{breunig2000}.
-  \item \textbf{Timing:} Kaplan--Meier curves~\cite{kaplan1958} and a Cox model~\cite{cox1972} stratified by crash.
+  \item \textbf{Archetypes:} k-means on within-crash percentiles, so each firm is compared with others in the same crash (missing values set to the middle, 0.5). $k$ is the best silhouette among solutions that are stable across random seeds (adjusted Rand index of at least 0.8). HDBSCAN~\cite{campello2013} is the check.
+  \item \textbf{Recovery rules:} FP-Growth association rules~\cite{han2000}. Each feature is cut into within-crash thirds (low and high kept) plus sector, with support of at least 5\% and lift of at least 1.1.
+  \item \textbf{Unusual firms:} Isolation Forest~\cite{liu2008} flags the most unusual 2\% of firm-crashes, with LOF~\cite{breunig2000} as a cross-check.
+  \item \textbf{Timing:} Kaplan--Meier curves~\cite{kaplan1958} and a Cox model~\cite{cox1972} stratified by crash, with standard errors clustered by firm. Failure is the only event that counts as never recovering.
 \end{itemize}
 
 % ---------------- 5. Results ----------------

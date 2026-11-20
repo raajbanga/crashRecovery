@@ -4,3 +4,5 @@ data/raw/
 __pycache__/
 .DS_Store
 .ipynb_checkpoints/
+slides/script.md
+slides/audio_overview.md
